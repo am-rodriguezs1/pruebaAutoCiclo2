@@ -109,6 +109,7 @@ jobs:
       - name: Debug Kraken node_modules contents (sub-directory)
         if: always() 
         working-directory: ./e2e/misw-4103-kraken # Check the sub-directory
+
         run: |
           echo "Current directory for debug: $(pwd)"
           echo "---------------------------------------------------------------------"
@@ -122,6 +123,8 @@ jobs:
 
       - name: Run Kraken tests against Ghost 4.x (using test:base)
         working-directory: ./e2e/misw-4103-kraken # Set working directory to where test:base is defined
+        env:
+          GHOST_VERSION: ${{ github.event.inputs.ghost_version_v4 }}
         run: |
           echo "Directorio de trabajo actual para pruebas de Kraken: $(pwd)"
           # mkdir para screenshots/reports ahora es relativo a este working-directory
