@@ -1,0 +1,90 @@
+name: Run Kraken Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      ghost_version:
+        description: 'Ghost version'
+        required: true
+        default: '5.114.1'
+
+jobs:
+  run-kraken:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.11.1'
+
+      - name: Install dependencies for Chrome, ADB, and other libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            android-tools-adb \
+            google-chrome-stable \
+            libnss3 \
+            libatk-bridge2.0-0 \
+            libxss1 \
+            libgbm1
+
+      - name: Install Ghost CLI
+        run: npm install -g ghost-cli
+
+      - name: Create Ghost working dir
+        run: mkdir ghost-site
+
+      - name: Set up Ghost instance
+        working-directory: ghost-site
+        run: |
+          ghost install ${{ github.event.inputs.ghost_version }} --no-prompt --no-start --local
+          ghost start
+
+      - name: Wait for Ghost to be ready
+        run: |
+          echo "Waiting for Ghost to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:2368/ghost/ > /dev/null; then
+              echo "Ghost is ready!"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Ghost did not start in time"
+          exit 1
+
+      - name: Install Node dependencies for Kraken
+        run: npm ci --prefix ./e2e/misw-4103-kraken
+
+      - name: Run Kraken tests with custom runner
+        run: |
+          export PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+          xvfb-run -a node krakenRunner.js
+        working-directory: e2e/misw-4103-kraken
+
+      - name: Upload Kraken screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: kraken-screenshots
+          path: e2e/misw-4103-kraken/screenshots/
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: e2e/misw-4103-kraken/reports/
+
+      - name: Teardown Ghost
+        if: always()
+        run: |
+          if [ -d "ghost-site" ]; then
+            ghost stop --dir ghost-site || echo "Ghost was not running"
+            ghost uninstall --yes --dir ghost-site || echo "Ghost was not installed"
+            rm -rf ghost-site
+          else
+            echo "ghost-site directory not found, skipping teardown"
+          fi
