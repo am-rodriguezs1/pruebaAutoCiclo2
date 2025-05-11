@@ -1,4 +1,4 @@
-name: Run Kraken Test - Subproject Strategy
+name: Run Kraken Test Ghost V5.114.1
 
 on:
   workflow_dispatch:
@@ -88,7 +88,6 @@ jobs:
           npm ci --prefix ./e2e/misw-4103-kraken
         # ¡MUY IMPORTANTE! Asegúrate de que el archivo 'e2e/misw-4103-kraken/package-lock.json'
         # esté actualizado, sea correcto y esté comiteado en tu repositorio.
-        # Si no está bien, 'npm ci' podría fallar o instalar cosas incorrectas.
 
       # Paso de depuración para el subdirectorio de Kraken
       - name: Debug Kraken node_modules contents
