@@ -1,4 +1,4 @@
-name: Run Kraken Test - Ghost 4.5.0 (apt-get fix)
+name: Run Kraken Test - Ghost 4.5.0 (test:base)
 
 on:
   workflow_dispatch:
@@ -27,8 +27,6 @@ jobs:
           node-version: '14.x'
 
       - name: Install system dependencies (Cleaned)
-        # This step installs all necessary system packages.
-        # Comments are now only outside the run block or on separate lines.
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -58,7 +56,6 @@ jobs:
           echo "ADB version: $(adb version || echo 'adb not found after install attempt')"
 
       - name: Install compatible Ghost CLI for Ghost 4.x
-        # Ghost-CLI 1.21.0 is the last version that supports Node 14.
         run: sudo npm install -g ghost-cli@1.21.0 && ghost --version
 
       - name: Create Ghost working dir (v4)
@@ -97,32 +94,38 @@ jobs:
           ghost log -e production
           exit 1
       
-      - name: Install Project (Kraken) dependencies for Node 14
+      - name: Install Kraken dependencies in sub-directory
+        # Installs dependencies based on e2e/misw-4103-kraken/package.json
+        # Creates/updates node_modules and package-lock.json within e2e/misw-4103-kraken/
+        # For Node 14 (npm v6), `npm install` is generally safer if the lockfile might be from a newer npm.
+        # If you have a package-lock.json in that subdir specifically generated with npm v6, `npm ci` would be faster.
         run: |
-          echo "Instalando dependencias del proyecto desde la raíz con Node.js $(node -v) y npm $(npm -v)..."
-          npm install
-          echo "Instalando/actualizando paquetes específicos de Kraken..."
-          npm install @cucumber/cucumber@7.2.1 kraken-node@^1.0.24
+          echo "Instalando dependencias de Kraken en ./e2e/misw-4103-kraken con Node.js $(node -v) y npm $(npm -v)..."
+          npm install --prefix ./e2e/misw-4103-kraken
 
-      - name: Debug Project node_modules contents (root)
+      - name: Debug Kraken node_modules contents (sub-directory)
         if: always() 
+        working-directory: ./e2e/misw-4103-kraken # Check the sub-directory
         run: |
           echo "Current directory for debug: $(pwd)"
           echo "---------------------------------------------------------------------"
-          echo "Listando contenido de ./node_modules/ (raíz):"
-          ls -la ./node_modules/ || echo "./node_modules/ (raíz) no encontrada o vacía"
+          echo "Listando contenido de ./node_modules/ (en e2e/misw-4103-kraken):"
+          ls -la ./node_modules/ || echo "./node_modules/ no encontrada o vacía"
           echo "---------------------------------------------------------------------"
-          echo "Listando contenido de ./node_modules/.bin/ (raíz):"
-          ls -la ./node_modules/.bin/ || echo "./node_modules/.bin/ (raíz) no encontrada o vacía"
+          echo "Listando contenido de ./node_modules/.bin/ (en e2e/misw-4103-kraken):"
+          ls -la ./node_modules/.bin/ || echo "./node_modules/.bin/ no encontrada o vacía"
           echo "---------------------------------------------------------------------"
         continue-on-error: true
 
-      - name: Run Kraken tests against Ghost 4.x
+      - name: Run Kraken tests against Ghost 4.x (using test:base)
+        working-directory: ./e2e/misw-4103-kraken # Set working directory to where test:base is defined
         run: |
           echo "Directorio de trabajo actual para pruebas de Kraken: $(pwd)"
-          mkdir -p ${{ github.workspace }}/e2e/misw-4103-kraken/screenshots 
-          mkdir -p ${{ github.workspace }}/e2e/misw-4103-kraken/reports
-          xvfb-run -a --server-args="-screen 0 1280x1024x24" npm run test:all 
+          # mkdir para screenshots/reports ahora es relativo a este working-directory
+          mkdir -p ./screenshots 
+          mkdir -p ./reports
+          # Ejecutar el script test:base definido en e2e/misw-4103-kraken/package.json
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" npm run test:base 
 
       - name: List files in screenshots directory (for upload verification)
         if: always()
