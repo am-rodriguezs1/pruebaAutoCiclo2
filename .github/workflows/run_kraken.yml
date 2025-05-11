@@ -40,7 +40,8 @@ jobs:
             libatk-bridge2.0-0 \
             libxss1 \
             libgbm1 \
-            libasound2t64 # !!!!! CORRECCIÓN IMPORTANTE AQUÍ !!!!!
+            android-tools-adb \
+            libasound2t64 
           echo "Chrome version: $(google-chrome-stable --version)"
 
       - name: Install Ghost CLI
@@ -88,12 +89,6 @@ jobs:
         # ¡MUY IMPORTANTE! Asegúrate de que el archivo 'e2e/misw-4103-kraken/package-lock.json'
         # esté actualizado, sea correcto y esté comiteado en tu repositorio.
         # Si no está bien, 'npm ci' podría fallar o instalar cosas incorrectas.
-        # Para regenerarlo localmente si tienes dudas:
-        # 1. cd e2e/misw-4103-kraken/
-        # 2. rm -rf node_modules package-lock.json
-        # 3. npm install
-        # 4. git add package-lock.json package.json
-        # 5. git commit -m "Update Kraken lockfile" && git push
 
       # Paso de depuración para el subdirectorio de Kraken
       - name: Debug Kraken node_modules contents
