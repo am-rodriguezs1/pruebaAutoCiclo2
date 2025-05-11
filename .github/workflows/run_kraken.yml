@@ -146,6 +146,18 @@ jobs:
 
       - name: Teardown Ghost
         if: always()
-        working-directory: ${{ github.workspace }}/ghost-instance-gha
         run: |
-          ghost stop || echo "Ghost no estaba corriendo o falló al detener."
+          GHOST_DIR="${{ github.workspace }}/ghost-instance-gha"
+          if [ -d "$GHOST_DIR" ]; then
+            echo "Attempting to stop Ghost in $GHOST_DIR"
+            # Ghost stop necesita ejecutarse desde el directorio donde está la instancia
+            # Cambiamos al directorio antes de ejecutar ghost stop
+            (cd "$GHOST_DIR" && ghost stop) || echo "Ghost stop failed or Ghost was not running/dir was not a Ghost instance."
+            # Opcional: Si quieres desinstalar y borrar completamente como en tu YAML anterior:
+            # echo "Attempting to uninstall Ghost from $GHOST_DIR"
+            # (cd "$GHOST_DIR" && ghost uninstall --yes) || echo "Ghost uninstall failed."
+            # echo "Removing Ghost instance directory $GHOST_DIR"
+            # rm -rf "$GHOST_DIR"
+          else
+            echo "Ghost instance directory $GHOST_DIR not found, skipping teardown."
+          fi
