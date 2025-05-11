@@ -20,7 +20,8 @@
     "test:base": "node krakenRunner.js escenarios_base"
   },
   "dependencies": {
-    "@faker-js/faker": "^9.6.0",
+    "@cucumber/cucumber": "^7.2.1",
+    "@faker-js/faker": "^5.5.3",
     "chai": "^5.2.0",
     "kraken-node": "^1.0.24"
   }

@@ -1,6 +1,6 @@
 const { Given, When, Then, Before } = require('@cucumber/cucumber');
 const assert = require('assert');
-const SignInPage = require('../page_objects/SignInPage');
+const SignInPage = require('../page_objects/SignInPagev4');
 const { takeKrakenScreenshot: takeScreenshot } = require('../../../takeScreenshot');
 const regex = /^(ESC\d{3})/;
 

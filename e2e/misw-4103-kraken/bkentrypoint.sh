@@ -11,7 +11,7 @@ else
     echo "Advertencia: El directorio home ${GHOST_USER_HOME} no existe."
 fi
 
-echo "--- Iniciando Ghost (Versión: ${GHOST_VERSION}) ---"
+echo "--- Iniciando Ghost ---"
 # Ejecutar los comandos de Ghost como 'ghostuser', asegurando que HOME apunte a /home/ghostuser.
 sudo -u ghostuser \
     HOME="${GHOST_USER_HOME}" \
@@ -48,6 +48,8 @@ cd /app
 
 # Establecer variables de entorno necesarias para la ejecución headless
 export DISPLAY=:99
+# Aunque PUPPETEER_LAUNCH_ARGS no parezca ser usado por kraken-node directamente para las flags,
+# lo mantenemos por si algún sub-proceso lo necesitara.
 export PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 export PUPPETEER_LAUNCH_ARGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --remote-debugging-port=9222"
 
@@ -56,17 +58,11 @@ echo "PUPPETEER_EXECUTABLE_PATH: ${PUPPETEER_EXECUTABLE_PATH}"
 echo "PUPPETEER_LAUNCH_ARGS: ${PUPPETEER_LAUNCH_ARGS}"
 echo "DISPLAY: ${DISPLAY}"
 
-# Variable de entorno para el comando de prueba.
-# Si TEST_COMMAND no está seteado, usará "npm run test:all" por defecto.
-# Puedes cambiar el valor por defecto si lo prefieres, o hacerlo obligatorio.
-ACTUAL_TEST_COMMAND="${TEST_COMMAND:-npm run test:all}"
-
-echo "--- Ejecutando Pruebas de Kraken ---"
-echo "Comando de prueba a ejecutar: ${ACTUAL_TEST_COMMAND}"
-
-# Ejecuta el script de prueba especificado por la variable ACTUAL_TEST_COMMAND
-# xvfb-run es crucial para el entorno headless en Docker.
-xvfb-run -a --server-args="-screen 0 1280x1024x24" ${ACTUAL_TEST_COMMAND}
+echo "--- Ejecutando pruebas de Kraken con krakenRunner ---"
+# Comando local es `npm run test:all`, que a su vez ejecuta `node krakenRunner.js`.
+# Ejecutamos `node krakenRunner.js` directamente aquí.
+# `xvfb-run` es crucial para el entorno headless en Docker.
+xvfb-run -a --server-args="-screen 0 1280x1024x24" npm run test:all
 KRAKEN_EXIT_CODE=$?
 
 echo "Las pruebas de Kraken finalizaron con el código de salida: $KRAKEN_EXIT_CODE"

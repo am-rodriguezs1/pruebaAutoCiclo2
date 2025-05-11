@@ -1,5 +1,5 @@
 const { Given, When, Then, Before } = require('@cucumber/cucumber');
-const { faker } = require('@faker-js/faker')
+const  faker  = require('@faker-js/faker')
 const SignInPage = require('../page_objects/SignInPage');
 const NewMemberPage = require('../page_objects/NewMemberPage');
 const { takeKrakenScreenshot: takeScreenshot } = require('../../../takeScreenshot');
@@ -52,7 +52,7 @@ Given('{kraken-string} I navigate to page {kraken-string} and path {kraken-strin
       let nameInput = await this.driver.$('input[id="member-name"]');
       await nameInput.waitForDisplayed({ timeout: 5000 });
       await nameInput.waitForEnabled({ timeout: 5000 });
-      await nameInput.setValue(faker.person.fullName());
+      await nameInput.setValue(faker.name.findName()); 
       await takeScreenshot(this.driver, this.scenarioNumber, step);
       return;
   });
@@ -71,7 +71,7 @@ Given('{kraken-string} I navigate to page {kraken-string} and path {kraken-strin
       await noteInput.waitForDisplayed({ timeout: 5000 });
   
       const words = faker.lorem.words(1000);
-      const result = words.slice(0, 501);
+      const result = wordsText.substring(0, 501); 
       await noteInput.setValue(result);
       await takeScreenshot(this.driver, this.scenarioNumber, step);
       return;
@@ -141,7 +141,7 @@ Given('{kraken-string} I navigate to page {kraken-string} and path {kraken-strin
 
     When('{kraken-string} I fill the member form with name and invalid email', async function (step) {
     const newMemberPage = new NewMemberPage(this.driver);
-    await newMemberPage.fillMemberForm(faker.person.fullName(), faker.person.firstName());
+    await newMemberPage.fillMemberForm(faker.name.findName(), faker.name.firstName());
     await takeScreenshot(this.driver, this.scenarioNumber, step);
     return;
     });
