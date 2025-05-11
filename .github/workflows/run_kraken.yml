@@ -1,4 +1,4 @@
-name: Run Kraken Test (Local Sim Debug)
+name: Run Kraken Test Ghost 5.114.1
 
 on:
   workflow_dispatch:
@@ -10,7 +10,12 @@ on:
 
 jobs:
   run-kraken:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest 
+
+    env: # Variables de entorno globales para el job,
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
+      PUPPETEER_LAUNCH_ARGS: "--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --remote-debugging-port=9222"
+      # NODE_ENV: production # Puedes añadirlo si es necesario para los scripts npm
 
     steps:
       - name: Checkout repository
@@ -19,106 +24,128 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.11.1' # Asegúrate que sea la misma que usas localmente para Kraken
+          node-version: '20.x'
 
-      - name: Install system dependencies
+      - name: Install system dependencies (alineado con Dockerfile)
         run: |
           sudo apt-get update
+          # Lista combinada y simplificada. Chrome trae muchas de sus propias libs.
+          # Añade más de tu Dockerfile si es necesario después de probar.
           sudo apt-get install -y \
             google-chrome-stable \
-            xvfb
+            xvfb \
+            curl \
+            wget \
+            gnupg \
+            unzip \
+            sudo \
+            libnss3 \
+            libatk-bridge2.0-0 \
+            libxss1 \
+            libgbm1 \
+            libasound2 \
+            # Considera añadir más libs de tu Dockerfile si Chrome no las incluye todas:
+            # libxcomposite1 libxdamage1 libxrandr2 libgtk-3-0 libdrm2
+          echo "Chrome version: $(google-chrome-stable --version)"
 
       - name: Install Ghost CLI
-        run: npm install -g ghost-cli
+        run: sudo npm install -g ghost-cli && ghost --version
 
+      # Directorio de trabajo para Ghost, similar a tu Dockerfile /var/www/ghost
+      # Usamos un directorio dentro del GITHUB_WORKSPACE para evitar problemas de permisos fuera de él.
       - name: Create Ghost working dir for GHA
-        run: mkdir ghost-instance-gha # Usar un nombre único para GHA
+        run: mkdir -p ${{ github.workspace }}/ghost-instance-gha
 
       - name: Set up Ghost instance
-        working-directory: ./ghost-instance-gha # Usar el directorio creado
+        working-directory: ${{ github.workspace }}/ghost-instance-gha
         run: |
           echo "Instalando Ghost versión: ${{ github.event.inputs.ghost_version }}"
-          ghost install ${{ github.event.inputs.ghost_version }} --no-prompt --no-start --local --db sqlite3 --no-setup-linux-user --process local
+          # Los flags son muy similares a tu Dockerfile
+          ghost install ${{ github.event.inputs.ghost_version }} \
+            --no-prompt \
+            --no-start \
+            --local \
+            --db sqlite3 \
+            --no-setup-linux-user \
+            --process local
           echo "Iniciando Ghost..."
-          ghost start --no-enable-stackdriver
+          ghost start --no-enable-stackdriver # Equivalente a tu entrypoint.sh
 
       - name: Wait for Ghost to be ready
+        working-directory: ${{ github.workspace }}/ghost-instance-gha # Ejecutar ghost status desde donde se instaló
         run: |
           echo "Esperando que Ghost esté listo..."
-          for i in {1..30}; do
+          for i in {1..30}; do # Equivalente a tu entrypoint (60s vs 150s aquí)
             if curl -s --fail http://localhost:2368/ghost/ > /dev/null; then
               echo "Ghost está listo!"
               exit 0
             fi
+            # Opcional: ghost status # Para más info de debug si falla
             echo "Intento $i: Ghost no está listo aún..."
             sleep 5
           done
           echo "Error: Ghost no inició a tiempo."
+          echo "Mostrando logs de Ghost:"
+          ghost log -e production # Muestra logs de Ghost
           exit 1
       
-      - name: Define Kraken working directory
-        id: paths
-        run: echo "kraken_dir=./e2e/misw-4103-kraken" >> $GITHUB_OUTPUT
+      #Instalar dependencias desde la raíz del proyecto.
+      - name: Install Project (Kraken) dependencies
+        run: npm ci # Esto asume que tu package.json y package-lock.json principal están en la raíz
 
-      - name: Create screenshots directory if it does not exist
-        run: mkdir -p ${{ steps.paths.outputs.kraken_dir }}/screenshots
-        # Este path es relativo a la raíz del checkout del repositorio.
-
-      - name: Install Kraken dependencies
-        working-directory: ${{ steps.paths.outputs.kraken_dir }}
-        run: npm ci # Asume que package-lock.json está en este directorio
-
-      - name: List binaries in node_modules/.bin
-        working-directory: ${{ steps.paths.outputs.kraken_dir }}
+      # Paso de depuración
+      - name: Debug node_modules contents in root
         run: |
-          echo "Contenido de ${{ steps.paths.outputs.kraken_dir }}/node_modules/.bin/:"
-          ls -la ${{ steps.paths.outputs.kraken_dir }}/node_modules/.bin/
-          echo "Fin del listado de binarios."
-          
+          echo "Current directory: $(pwd)"
+          echo "---------------------------------------------------------------------"
+          echo "Attempting to list contents of ./node_modules/ (relative to root):"
+          ls -la ./node_modules/ || echo "./node_modules/ not found or empty"
+          echo "---------------------------------------------------------------------"
+          echo "Attempting to list contents of ./node_modules/.bin/ (relative to root):"
+          ls -la ./node_modules/.bin/ || echo "./node_modules/.bin/ not found or empty"
+          echo "---------------------------------------------------------------------"
+        continue-on-error: true
+
+      # Ejecutar pruebas desde la raíz del proyecto.
       - name: Run Kraken tests
-        working-directory: ${{ steps.paths.outputs.kraken_dir }}
         run: |
           echo "Directorio de trabajo actual para pruebas de Kraken: $(pwd)"
-          echo "PUPPETEER_EXECUTABLE_PATH (antes de exportar): $PUPPETEER_EXECUTABLE_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH: $PUPPETEER_EXECUTABLE_PATH"
+          echo "PUPPETEER_LAUNCH_ARGS: $PUPPETEER_LAUNCH_ARGS"
           
-          echo "Listando contenido de $(pwd):"
-          ls -la
-          
-          echo "Contenido de $(pwd)/screenshots/ ANTES de la prueba:"
-          ls -la ./screenshots || echo "Carpeta ./screenshots no existe o está vacía (antes)"
-          
-          export PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
-          echo "PUPPETEER_EXECUTABLE_PATH (después de exportar): $PUPPETEER_EXECUTABLE_PATH"
-          
-          # Usar ./node_modules/.bin/kraken-node run  para consistencia con `npm run test`
-          xvfb-run -a --server-args="-screen 0 1280x1024x24" ./node_modules/.bin/kraken-node run 
-          
-          echo "Contenido de $(pwd)/screenshots/ DESPUÉS de la prueba:"
-          ls -la ./screenshots || echo "Carpeta ./screenshots no existe o está vacía (después)"
+          # Asegurar que la carpeta de screenshots exista, ajusta la ruta si es necesario
+          # Si tu script "npm run test:all" espera que "screenshots" esté en "e2e/misw-4103-kraken/screenshots"
+          mkdir -p ${{ github.workspace }}/e2e/misw-4103-kraken/screenshots 
+          mkdir -p ${{ github.workspace }}/e2e/misw-4103-kraken/reports
+
+          # Ejecuta el comando de prueba como en tu entrypoint.sh
+          # Asumiendo que tu package.json raíz tiene un script "test:all" u otro apropiado.
+          # Si tu TEST_COMMAND es diferente, ajústalo aquí.
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" npm run test:all
 
       - name: List files in screenshots directory (for upload verification)
         if: always()
-        working-directory: ${{ steps.paths.outputs.kraken_dir }}
         run: |
-          echo "Verificando contenido para upload-artifact en $(pwd)/screenshots"
-          ls -R screenshots || echo "Carpeta screenshots no encontrada o vacía en $(pwd) para upload"
+          echo "Verificando contenido para upload-artifact en e2e/misw-4103-kraken/screenshots"
+          ls -R ${{ github.workspace }}/e2e/misw-4103-kraken/screenshots || echo "Carpeta screenshots no encontrada o vacía"
 
       - name: Upload Kraken screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: kraken-screenshots-local-sim
-          path: ${{ steps.paths.outputs.kraken_dir }}/screenshots/ # Ruta desde la raíz del repo
+          # relativo a la raíz.
+          path: ${{ github.workspace }}/e2e/misw-4103-kraken/screenshots/
 
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-report-local-sim
-          path: ${{ steps.paths.outputs.kraken_dir }}/reports/
+          path: ${{ github.workspace }}/e2e/misw-4103-kraken/reports/
 
       - name: Teardown Ghost
         if: always()
-        working-directory: ./ghost-instance-gha # Usar el directorio correcto
+        working-directory: ${{ github.workspace }}/ghost-instance-gha
         run: |
           ghost stop || echo "Ghost no estaba corriendo o falló al detener."
