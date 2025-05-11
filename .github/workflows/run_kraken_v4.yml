@@ -1,4 +1,4 @@
-name: Run Kraken Test - Ghost 4.5.0 (on Ubuntu 22.04)
+name: Run Kraken Test - Ghost 4.5.0 (on Ubuntu 22.04 - libasound2 fix)
 
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ jobs:
         with:
           node-version: '14.x'
 
-      - name: Install system dependencies for Ubuntu 22.04 (Corrected)
+      - name: Install system dependencies for Ubuntu 22.04 (Corrected libasound2)
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -41,7 +41,7 @@ jobs:
             libatk-bridge2.0-0 \
             libxss1 \
             libgbm1 \
-            libasound2t64 \
+            libasound2 \ # CORREGIDO: Usar libasound2 para Ubuntu 22.04
             libxcomposite1 \
             libxdamage1 \
             libxrandr2 \
@@ -56,6 +56,7 @@ jobs:
           echo "ADB version: $(adb version || echo 'adb not found after install attempt')"
 
       - name: Install compatible Ghost CLI for Ghost 4.x
+        # Ghost-CLI 1.21.0 es la última versión que soporta Node 14.
         run: sudo npm install -g ghost-cli@1.21.0 && ghost --version
 
       - name: Create Ghost working dir (v4)
@@ -81,7 +82,7 @@ jobs:
         working-directory: ${{ github.workspace }}/ghost-instance-v4
         run: |
           echo "Esperando que Ghost (v4) esté listo..."
-          for i in {1..30}; do 
+          for i in {1..30}; do # ~2.5 minutos de espera máxima
             if curl -s --fail http://localhost:2368/ghost/ > /dev/null; then
               echo "Ghost (v4) está listo!"
               exit 0
@@ -91,7 +92,7 @@ jobs:
           done
           echo "Error: Ghost (v4) no inició a tiempo."
           echo "Mostrando logs de Ghost (v4):"
-          ghost log -e production
+          ghost log -e production # Asumiendo que NODE_ENV=production se propaga
           exit 1
       
       - name: Install Project (Kraken) dependencies for Node 14
@@ -102,26 +103,43 @@ jobs:
           # Pero si tu lockfile raíz es compatible o prefieres usarlo, omite el rm.
           npm install
           echo "Instalando/actualizando paquetes específicos de Kraken..."
+          # Usamos las versiones de tu e2e/misw-4103-kraken/package.json como referencia
           npm install @cucumber/cucumber@7.2.1 kraken-node@^1.0.24
 
       - name: Debug Project node_modules contents (root)
-        if: always()
+        if: always() # Ejecutar siempre para depuración
         run: |
           echo "Current directory for debug: $(pwd)"
+          echo "---------------------------------------------------------------------"
+          echo "Listando contenido de ./node_modules/ (raíz):"
           ls -la ./node_modules/ || echo "./node_modules/ (raíz) no encontrada o vacía"
+          echo "---------------------------------------------------------------------"
+          echo "Listando contenido de ./node_modules/.bin/ (raíz):"
           ls -la ./node_modules/.bin/ || echo "./node_modules/.bin/ (raíz) no encontrada o vacía"
-        continue-on-error: true
+          echo "---------------------------------------------------------------------"
+        continue-on-error: true # Para que el workflow no falle aquí si algo no se encuentra
 
       - name: Run Kraken tests against Ghost 4.x
+        # Se asume que el script para correr Kraken está en el package.json de la RAÍZ
+        # y que este script llama a `node e2e/misw-4103-kraken/krakenRunner.js`
         run: |
           echo "Directorio de trabajo actual para pruebas de Kraken: $(pwd)"
+          # Asegurar que las carpetas para los resultados existan, relativas a la raíz del workspace
           mkdir -p ${{ github.workspace }}/e2e/misw-4103-kraken/screenshots 
           mkdir -p ${{ github.workspace }}/e2e/misw-4103-kraken/reports
-          xvfb-run -a --server-args="-screen 0 1280x1024x24" npm run test:all
+
+          # Asumiendo que tienes un script como "test:all" o similar en tu package.json RAÍZ
+          # que ejecuta "node e2e/misw-4103-kraken/krakenRunner.js"
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" npm run test:all 
+          # Si no tienes un script, podrías intentar directamente:
+          # xvfb-run -a --server-args="-screen 0 1280x1024x24" node e2e/misw-4103-kraken/krakenRunner.js
+          # pero usar un script npm es más limpio si `krakenRunner.js` espera estar en un contexto npm.
 
       - name: List files in screenshots directory (for upload verification)
         if: always()
         run: |
+          echo "Verificando contenido para upload-artifact en e2e/misw-4103-kraken/screenshots"
+          # La ruta debe ser desde la raíz del workspace para el upload-artifact
           ls -R ${{ github.workspace }}/e2e/misw-4103-kraken/screenshots || echo "Carpeta screenshots no encontrada o vacía"
 
       - name: Upload Kraken screenshots (Ghost v4 run)
@@ -144,6 +162,7 @@ jobs:
           GHOST_DIR_V4="${{ github.workspace }}/ghost-instance-v4"
           if [ -d "$GHOST_DIR_V4" ]; then
             echo "Attempting to stop Ghost (v4) in $GHOST_DIR_V4"
+            # Cambiamos al directorio antes de ejecutar ghost stop
             (cd "$GHOST_DIR_V4" && ghost stop) || echo "Ghost stop (v4) failed or Ghost was not running/dir was not a Ghost instance."
           else
             echo "Ghost instance directory $GHOST_DIR_V4 not found, skipping teardown."
