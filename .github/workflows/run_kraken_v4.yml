@@ -101,6 +101,7 @@ jobs:
         run: |
           echo "Instalando dependencias de Kraken en ./e2e/misw-4103-kraken con Node.js $(node -v) y npm $(npm -v)..."
           npm install --prefix ./e2e/misw-4103-kraken
+          npm install --prefix ./e2e/misw-4103-kraken @cucumber/cucumber@7.2.1
 
       - name: Debug Kraken node_modules contents (sub-directory)
         if: always() 
