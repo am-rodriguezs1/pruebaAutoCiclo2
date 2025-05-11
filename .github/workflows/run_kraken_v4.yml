@@ -1,5 +1,4 @@
-name: Run Kraken Test - Ghost 4.5.0 (test:base)
-
+name: Run Kraken Test - Ghost 4.5.0 
 on:
   workflow_dispatch:
     inputs:
