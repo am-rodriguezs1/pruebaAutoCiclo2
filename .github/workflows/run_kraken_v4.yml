@@ -1,21 +1,21 @@
-name: Run Kraken Test - Ghost 4.5
+name: Run Kraken Test - Ghost 4.5.0 (on Ubuntu 22.04)
 
 on:
   workflow_dispatch:
     inputs:
-      ghost_version_v4: # Nombre de input diferente para evitar conflictos si se usa en el mismo repo
+      ghost_version_v4:
         description: 'Ghost version (v4.x.x)'
         required: true
-        default: '4.5'
+        default: '4.5.0'
 
 jobs:
   run-kraken-ghost-v4:
-    runs-on: ubuntu-22.04 # Especificar Ubuntu 22.04 
+    runs-on: ubuntu-22.04 # Mantenemos Ubuntu 22.04
 
     env:
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
       PUPPETEER_LAUNCH_ARGS: "--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --remote-debugging-port=9222"
-      NODE_ENV: production 
+      NODE_ENV: production
 
     steps:
       - name: Checkout repository
@@ -24,9 +24,9 @@ jobs:
       - name: Set up Node.js 14.x
         uses: actions/setup-node@v4
         with:
-          node-version: '14.x' # Node.js 14.x para Ghost 4.5.0
+          node-version: '14.x'
 
-      - name: Install system dependencies for Ubuntu 20.04
+      - name: Install system dependencies for Ubuntu 22.04 (Corrected)
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -41,15 +41,12 @@ jobs:
             libatk-bridge2.0-0 \
             libxss1 \
             libgbm1 \
-            libasound2 \ # Para Ubuntu 20.04, libasound2 es correcto
+            libasound2t64 \
             libxcomposite1 \
             libxdamage1 \
             libxrandr2 \
             libgtk-3-0 \
             libdrm2 \
-            libu2f-udev \
-            fonts-liberation \
-            libappindicator3-1 \
             ca-certificates \
             apt-transport-https \
             android-tools-adb
@@ -59,11 +56,10 @@ jobs:
           echo "ADB version: $(adb version || echo 'adb not found after install attempt')"
 
       - name: Install compatible Ghost CLI for Ghost 4.x
-        # Ghost-CLI 1.21.0 es la última versión que soporta Node 14.
         run: sudo npm install -g ghost-cli@1.21.0 && ghost --version
 
       - name: Create Ghost working dir (v4)
-        run: mkdir -p ${{ github.workspace }}/ghost-instance-v4 # Directorio con nombre diferente
+        run: mkdir -p ${{ github.workspace }}/ghost-instance-v4
 
       - name: Set up Ghost 4.x instance
         working-directory: ${{ github.workspace }}/ghost-instance-v4
@@ -95,53 +91,37 @@ jobs:
           done
           echo "Error: Ghost (v4) no inició a tiempo."
           echo "Mostrando logs de Ghost (v4):"
-          ghost log -e production # Asumiendo que NODE_ENV=production se propaga
+          ghost log -e production
           exit 1
       
-      # Instalar dependencias del proyecto (Kraken) desde la raíz
-      # Siguiendo la lógica del Dockerfile para Ghost v4:
-      # 1. npm install (usa package.json raíz, puede crear/actualizar package-lock.json)
-      # 2. npm install <paquetes_especificos_kraken>
       - name: Install Project (Kraken) dependencies for Node 14
-        # No se usa --prefix, opera en la raíz del checkout
         run: |
           echo "Instalando dependencias del proyecto desde la raíz con Node.js $(node -v) y npm $(npm -v)..."
-          # Opcional: rm -f package-lock.json # Si quieres forzar una resolución fresca como sugiere el comentario en tu Dockerfile
+          # Si tienes un package-lock.json en la raíz que fue generado con una versión de npm/Node diferente
+          # y quieres una resolución fresca para Node 14, podrías necesitar: rm -f package-lock.json
+          # Pero si tu lockfile raíz es compatible o prefieres usarlo, omite el rm.
           npm install
           echo "Instalando/actualizando paquetes específicos de Kraken..."
-          # Usamos las versiones de tu e2e/misw-4103-kraken/package.json como referencia
           npm install @cucumber/cucumber@7.2.1 kraken-node@^1.0.24
-        # ¡IMPORTANTE! Esto modificará node_modules en la raíz.
-        # Si tu package.json raíz ya tiene estas dependencias con estas versiones,
-        # el segundo `npm install` podría ser redundante o solo verificar.
 
       - name: Debug Project node_modules contents (root)
         if: always()
         run: |
           echo "Current directory for debug: $(pwd)"
-          echo "---------------------------------------------------------------------"
-          echo "Listando contenido de ./node_modules/ (raíz):"
           ls -la ./node_modules/ || echo "./node_modules/ (raíz) no encontrada o vacía"
-          echo "---------------------------------------------------------------------"
-          echo "Listando contenido de ./node_modules/.bin/ (raíz):"
           ls -la ./node_modules/.bin/ || echo "./node_modules/.bin/ (raíz) no encontrada o vacía"
-          echo "---------------------------------------------------------------------"
         continue-on-error: true
 
       - name: Run Kraken tests against Ghost 4.x
-        # Se asume que el script para correr Kraken está en el package.json de la RAÍZ
-        # y que este script llama a `node e2e/misw-4103-kraken/krakenRunner.js`
         run: |
           echo "Directorio de trabajo actual para pruebas de Kraken: $(pwd)"
-          # Asegurar que las carpetas para los resultados existan, relativas a la raíz del workspace
           mkdir -p ${{ github.workspace }}/e2e/misw-4103-kraken/screenshots 
           mkdir -p ${{ github.workspace }}/e2e/misw-4103-kraken/reports
-          xvfb-run -a --server-args="-screen 0 1280x1024x24" npm run test:base 
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" npm run test:all
 
       - name: List files in screenshots directory (for upload verification)
         if: always()
         run: |
-          echo "Verificando contenido para upload-artifact en e2e/misw-4103-kraken/screenshots"
           ls -R ${{ github.workspace }}/e2e/misw-4103-kraken/screenshots || echo "Carpeta screenshots no encontrada o vacía"
 
       - name: Upload Kraken screenshots (Ghost v4 run)
