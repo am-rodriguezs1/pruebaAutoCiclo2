@@ -83,8 +83,8 @@ jobs:
           export PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
           echo "PUPPETEER_EXECUTABLE_PATH (después de exportar): $PUPPETEER_EXECUTABLE_PATH"
           
-          # Usar npx kraken-node run para consistencia con `npm run test`
-          xvfb-run -a --server-args="-screen 0 1280x1024x24" npx kraken-node run
+          # Usar ./node_modules/.bin/kraken-node run  para consistencia con `npm run test`
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" ./node_modules/.bin/kraken-node run 
           
           echo "Contenido de $(pwd)/screenshots/ DESPUÉS de la prueba:"
           ls -la ./screenshots || echo "Carpeta ./screenshots no existe o está vacía (después)"
