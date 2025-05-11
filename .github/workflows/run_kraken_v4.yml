@@ -94,14 +94,17 @@ jobs:
           exit 1
       
       - name: Install Kraken dependencies in sub-directory
-        # Installs dependencies based on e2e/misw-4103-kraken/package.json
-        # Creates/updates node_modules and package-lock.json within e2e/misw-4103-kraken/
-        # For Node 14 (npm v6), `npm install` is generally safer if the lockfile might be from a newer npm.
-        # If you have a package-lock.json in that subdir specifically generated with npm v6, `npm ci` would be faster.
         run: |
           echo "Instalando dependencias de Kraken en ./e2e/misw-4103-kraken con Node.js $(node -v) y npm $(npm -v)..."
           npm install --prefix ./e2e/misw-4103-kraken
           npm install --prefix ./e2e/misw-4103-kraken @cucumber/cucumber@7.2.1
+        
+      - name: Explicitly install/update kraken-node in sub-directory
+        working-directory: ./e2e/misw-4103-kraken # Establece el directorio de trabajo
+        run: |
+          echo "Ejecutando 'npm install kraken-node' en $(pwd)..."
+          npm install kraken-node
+        
 
       - name: Debug Kraken node_modules contents (sub-directory)
         if: always() 
