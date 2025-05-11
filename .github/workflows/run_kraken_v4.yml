@@ -1,4 +1,4 @@
-name: Run Kraken Test - Ghost 4.5.0
+name: Run Kraken Test - Ghost 4.5
 
 on:
   workflow_dispatch:
@@ -6,16 +6,16 @@ on:
       ghost_version_v4: # Nombre de input diferente para evitar conflictos si se usa en el mismo repo
         description: 'Ghost version (v4.x.x)'
         required: true
-        default: '4.5.0'
+        default: '4.5'
 
 jobs:
   run-kraken-ghost-v4:
-    runs-on: ubuntu-20.04 # Especificar Ubuntu 20.04 como en tu Dockerfile
+    runs-on: ubuntu-22.04 # Especificar Ubuntu 22.04 
 
     env:
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
       PUPPETEER_LAUNCH_ARGS: "--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --remote-debugging-port=9222"
-      NODE_ENV: production # Como en tu Dockerfile
+      NODE_ENV: production 
 
     steps:
       - name: Checkout repository
@@ -136,13 +136,7 @@ jobs:
           # Asegurar que las carpetas para los resultados existan, relativas a la raíz del workspace
           mkdir -p ${{ github.workspace }}/e2e/misw-4103-kraken/screenshots 
           mkdir -p ${{ github.workspace }}/e2e/misw-4103-kraken/reports
-
-          # Asumiendo que tienes un script como "test:all" o similar en tu package.json RAÍZ
-          # que ejecuta "node e2e/misw-4103-kraken/krakenRunner.js"
-          xvfb-run -a --server-args="-screen 0 1280x1024x24" npm run test:all 
-          # Si no tienes un script, podrías intentar directamente:
-          # xvfb-run -a --server-args="-screen 0 1280x1024x24" node e2e/misw-4103-kraken/krakenRunner.js
-          # pero usar un script npm es más limpio si `krakenRunner.js` espera estar en un contexto npm.
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" npm run test:base 
 
       - name: List files in screenshots directory (for upload verification)
         if: always()
