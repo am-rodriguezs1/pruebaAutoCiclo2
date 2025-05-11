@@ -1,4 +1,4 @@
-name: Run Kraken Test
+name: Run Kraken Test (Local Sim Debug)
 
 on:
   workflow_dispatch:
@@ -14,77 +14,104 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '20.11.1'
+          node-version: '20.11.1' # Asegúrate que sea la misma que usas localmente para Kraken
 
-      - name: Install dependencies for Chrome, ADB, and other libraries
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            android-tools-adb \
             google-chrome-stable \
-            libnss3 \
-            libatk-bridge2.0-0 \
-            libxss1 \
-            libgbm1
+            xvfb
 
       - name: Install Ghost CLI
         run: npm install -g ghost-cli
 
-      - name: Create Ghost working dir
-        run: mkdir ghost-site
+      - name: Create Ghost working dir for GHA
+        run: mkdir ghost-instance-gha # Usar un nombre único para GHA
 
       - name: Set up Ghost instance
-        working-directory: ghost-site
+        working-directory: ./ghost-instance-gha # Usar el directorio creado
         run: |
-          ghost install ${{ github.event.inputs.ghost_version }} --no-prompt --no-start --local
-          ghost start
+          echo "Instalando Ghost versión: ${{ github.event.inputs.ghost_version }}"
+          ghost install ${{ github.event.inputs.ghost_version }} --no-prompt --no-start --local --db sqlite3 --no-setup-linux-user --process local
+          echo "Iniciando Ghost..."
+          ghost start --no-enable-stackdriver
 
       - name: Wait for Ghost to be ready
         run: |
-          echo "Waiting for Ghost to be ready..."
+          echo "Esperando que Ghost esté listo..."
           for i in {1..30}; do
-            if curl -s http://localhost:2368/ghost/ > /dev/null; then
-              echo "Ghost is ready!"
+            if curl -s --fail http://localhost:2368/ghost/ > /dev/null; then
+              echo "Ghost está listo!"
               exit 0
             fi
+            echo "Intento $i: Ghost no está listo aún..."
             sleep 5
           done
-          echo "Ghost did not start in time"
+          echo "Error: Ghost no inició a tiempo."
           exit 1
+      
+      - name: Define Kraken working directory
+        id: paths
+        run: echo "kraken_dir=./e2e/misw-4103-kraken" >> $GITHUB_OUTPUT
 
-      - name: Install Node dependencies for Kraken
-        run: npm ci --prefix ./e2e/misw-4103-kraken
+      - name: Create screenshots directory if it does not exist
+        run: mkdir -p ${{ steps.paths.outputs.kraken_dir }}/screenshots
+        # Este path es relativo a la raíz del checkout del repositorio.
 
-      - name: Run Kraken tests with custom runner
+      - name: Install Kraken dependencies
+        working-directory: ${{ steps.paths.outputs.kraken_dir }}
+        run: npm ci # Asume que package-lock.json está en este directorio
+
+      - name: Run Kraken tests
+        working-directory: ${{ steps.paths.outputs.kraken_dir }}
         run: |
+          echo "Directorio de trabajo actual para pruebas de Kraken: $(pwd)"
+          echo "PUPPETEER_EXECUTABLE_PATH (antes de exportar): $PUPPETEER_EXECUTABLE_PATH"
+          
+          echo "Listando contenido de $(pwd):"
+          ls -la
+          
+          echo "Contenido de $(pwd)/screenshots/ ANTES de la prueba:"
+          ls -la ./screenshots || echo "Carpeta ./screenshots no existe o está vacía (antes)"
+          
           export PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
-          xvfb-run -a node krakenRunner.js
-        working-directory: e2e/misw-4103-kraken
+          echo "PUPPETEER_EXECUTABLE_PATH (después de exportar): $PUPPETEER_EXECUTABLE_PATH"
+          
+          # Usar npx kraken-node run para consistencia con `npm run test`
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" npx kraken-node run
+          
+          echo "Contenido de $(pwd)/screenshots/ DESPUÉS de la prueba:"
+          ls -la ./screenshots || echo "Carpeta ./screenshots no existe o está vacía (después)"
+
+      - name: List files in screenshots directory (for upload verification)
+        if: always()
+        working-directory: ${{ steps.paths.outputs.kraken_dir }}
+        run: |
+          echo "Verificando contenido para upload-artifact en $(pwd)/screenshots"
+          ls -R screenshots || echo "Carpeta screenshots no encontrada o vacía en $(pwd) para upload"
 
       - name: Upload Kraken screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kraken-screenshots
-          path: e2e/misw-4103-kraken/screenshots/
+          name: kraken-screenshots-local-sim
+          path: ${{ steps.paths.outputs.kraken_dir }}/screenshots/ # Ruta desde la raíz del repo
 
       - name: Upload test report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-report
-          path: e2e/misw-4103-kraken/reports/
+          name: test-report-local-sim
+          path: ${{ steps.paths.outputs.kraken_dir }}/reports/
 
       - name: Teardown Ghost
         if: always()
+        working-directory: ./ghost-instance-gha # Usar el directorio correcto
         run: |
-          if [ -d "ghost-site" ]; then
-            ghost stop --dir ghost-site || echo "Ghost was not running"
-            ghost uninstall --yes --dir ghost-site || echo "Ghost was not installed"
-            rm -rf ghost-site
-          else
-            echo "ghost-site directory not found, skipping teardown"
-          fi
+          ghost stop || echo "Ghost no estaba corriendo o falló al detener."
